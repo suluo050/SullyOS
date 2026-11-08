@@ -66,17 +66,9 @@ function recordKey(data: any): string | null {
 // ─── 通用辅助 ──────────────────────────────────────────
 
 /** 通用 getAll by index */
-async function getAllByIndex<T>(
+async function getAllByIndexLocal<T>(
     storeName: string, indexName: string, value: IDBValidKey
 ): Promise<T[]> {
-    if (getPalaceRemote()) {
-        try {
-            const data = await palaceFetch("/palace/" + encodeURIComponent(storeName) + "?index=" + encodeURIComponent(indexName) + "&value=" + encodeURIComponent(String(value)));
-            return (data.items || []) as T[];
-        } catch (err) {
-            console.warn("[palace] remote getAllByIndex failed", err);
-        }
-    }
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readonly');
@@ -88,19 +80,44 @@ async function getAllByIndex<T>(
     });
 }
 
+async function getAllByIndex<T>(
+    storeName: string, indexName: string, value: IDBValidKey
+): Promise<T[]> {
+    if (getPalaceRemote()) {
+        try {
+            const data = await palaceFetch("/palace/" + encodeURIComponent(storeName) + "?index=" + encodeURIComponent(indexName) + "&value=" + encodeURIComponent(String(value)));
+            const remote = (data.items || []) as T[];
+            if (remote.length) return remote;
+        } catch (err) {
+            console.warn("[palace] remote getAllByIndex failed", err);
+        }
+    }
+    return getAllByIndexLocal<T>(storeName, indexName, value);
+}
+
 /** 通用 put */
 async function put<T>(storeName: string, data: T): Promise<void> {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).put(data as any);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
     if (getPalaceRemote()) {
         const key = recordKey(data);
         if (key) {
             try {
                 await palaceFetch("/palace/" + encodeURIComponent(storeName), { method: "PUT", body: JSON.stringify({ key, value: data }) });
-                return;
             } catch (err) {
-                console.warn("[palace] remote put failed", err);
+                console.warn("[palace] remote put failed (local kept)", err);
             }
         }
     }
+    return;
+}
+
+async function putLegacy<T>(storeName: string, data: T): Promise<void> {
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readwrite');
@@ -132,14 +149,24 @@ async function getByKey<T>(storeName: string, key: IDBValidKey): Promise<T | und
 
 /** 通用 delete by key */
 async function deleteByKey(storeName: string, key: IDBValidKey): Promise<void> {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).delete(key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
     if (getPalaceRemote()) {
         try {
             await palaceFetch("/palace/" + encodeURIComponent(storeName) + "?key=" + encodeURIComponent(String(key)), { method: "DELETE" });
-            return;
         } catch (err) {
-            console.warn("[palace] remote delete failed", err);
+            console.warn("[palace] remote delete failed (local kept)", err);
         }
     }
+    return;
+}
+
+async function deleteByKeyLegacy(storeName: string, key: IDBValidKey): Promise<void> {
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readwrite');
@@ -150,15 +177,7 @@ async function deleteByKey(storeName: string, key: IDBValidKey): Promise<void> {
 }
 
 /** 通用 getAll (全表) */
-async function getAll<T>(storeName: string): Promise<T[]> {
-    if (getPalaceRemote()) {
-        try {
-            const data = await palaceFetch("/palace/" + encodeURIComponent(storeName));
-            return (data.items || []) as T[];
-        } catch (err) {
-            console.warn("[palace] remote getAll failed", err);
-        }
-    }
+async function getAllLocal<T>(storeName: string): Promise<T[]> {
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readonly');
@@ -166,6 +185,19 @@ async function getAll<T>(storeName: string): Promise<T[]> {
         req.onsuccess = () => resolve(req.result || []);
         req.onerror = () => reject(req.error);
     });
+}
+
+async function getAll<T>(storeName: string): Promise<T[]> {
+    if (getPalaceRemote()) {
+        try {
+            const data = await palaceFetch("/palace/" + encodeURIComponent(storeName));
+            const remote = (data.items || []) as T[];
+            if (remote.length) return remote;
+        } catch (err) {
+            console.warn("[palace] remote getAll failed", err);
+        }
+    }
+    return getAllLocal<T>(storeName);
 }
 
 // ─── MemoryNode CRUD ──────────────────────────────────
