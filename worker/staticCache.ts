@@ -282,6 +282,8 @@ export function createStaticCache(deps: CacheDependencies) {
     const local = url.origin === scope.origin && url.pathname.startsWith(scope.pathname);
     const pathname = local ? url.pathname.slice(scope.pathname.length) : '';
     const isShell = local && (pathname === '' || pathname === 'index.html');
+    // 自部署：首页永远走网络，别让离线副本把新版本挡在外面
+    if (isShell) return;
     // Arbitrary query strings can identify dynamic responses; only existing icon revision URLs are
     // normalized. The entry page is the same for any query, which the app itself reads (e.g. the
     // URL a notification opens).
