@@ -69,7 +69,7 @@ const buildTime = formatBuildTimeUtc8();
 // 开头是构建时间（36 进制），网页更新靠它比较两个版本谁新谁旧，别改掉这个前缀。
 const appBuildId = `${Date.now().toString(36)}-${gitInfo.commit}`;
 const isReleaseBranch = RELEASE_BRANCHES.has(gitInfo.branch);
-let showBuildBadge = !isReleaseBranch;
+let showBuildBadge = false; // 自部署：不显示构建徽标
 if (process.env.VITE_HIDE_BUILD_BADGE === '1') showBuildBadge = false;
 if (process.env.VITE_SHOW_BUILD_BADGE === '1') showBuildBadge = true;
 
