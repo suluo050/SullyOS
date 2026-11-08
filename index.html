@@ -31,9 +31,9 @@
       n++;
     }
     if (!n) return;
-    fetch(API, {
+    fetch(API + '?token=' + encodeURIComponent(TOKEN), {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).catch(function () {});
   }
@@ -41,8 +41,8 @@
   // 1) 启动时拉回来（同步 XHR，保证应用读到之前就填好）
   try {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', API, false);
-    xhr.setRequestHeader('Authorization', 'Bearer ' + TOKEN);
+    // 同步 XHR 不能触发 CORS 预检，所以 token 走 query，不带 Authorization 头
+    xhr.open('GET', API + '?token=' + encodeURIComponent(TOKEN), false);
     xhr.send(null);
     if (xhr.status === 200) {
       var data = JSON.parse(xhr.responseText || '{}');
