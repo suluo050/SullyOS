@@ -9,7 +9,7 @@
   var API = 'https://home.pyxlyjysys.icu/api/sully/config';
   var TOKEN = 'rvoN3iEDI0Fehhk4aT7aaIToEav3SvT6xqmLmYKHmEcZX3hL';
   var PREFIXES = ['os_', 'aetheros', 'sully', 'chat_', 'mp_', 'vr_'];
-  var SKIP = ['sully_proxy_worker_url_v1', 'sully_palace_remote_v1'];
+  var SKIP = ['sully_palace_remote_v1'];
 
   function wanted(k) {
     if (!k || SKIP.indexOf(k) >= 0) return false;
@@ -442,5 +442,80 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-  </body>
+  <script>
+/* __sullyDeliver: 把后端攒下的主动消息投进本地聊天记录 */
+(function () {
+  var API = 'https://home.pyxlyjysys.icu/api/sully/pending';
+
+  function findDbName() {
+    return new Promise(function (resolve) {
+      try {
+        if (!indexedDB.databases) { resolve('AetherOS_Data'); return; }
+        indexedDB.databases().then(function (list) {
+          var hit = (list || []).map(function (d) { return d.name; })
+            .filter(function (n) { return n && n.indexOf('AetherOS_Data') === 0; })[0];
+          resolve(hit || 'AetherOS_Data');
+        }).catch(function () { resolve('AetherOS_Data'); });
+      } catch (e) { resolve('AetherOS_Data'); }
+    });
+  }
+
+  function openDb(name) {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(name);   // 不带版本号，连现有库，不触发 upgrade
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  function insert(db, msg) {
+    return new Promise(function (resolve) {
+      try {
+        var tx = db.transaction('messages', 'readwrite');
+        tx.objectStore('messages').add(msg);
+        tx.oncomplete = function () { resolve(true); };
+        tx.onerror = function () { resolve(false); };
+        tx.onabort = function () { resolve(false); };
+      } catch (e) { resolve(false); }
+    });
+  }
+
+  async function run() {
+    var res = await fetch(API + '?t=' + Date.now());
+    var data = await res.json();
+    var items = (data && data.items) || [];
+    if (!items.length) return;
+
+    var name = await findDbName();
+    var db = await openDb(name);
+    var raw = localStorage.getItem('os_last_active_char_id');
+    var cid = '';
+    try { cid = raw ? JSON.parse(raw) : ''; } catch (e) { cid = raw || ''; }
+
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var ok = await insert(db, {
+        id: Date.now() + i,
+        charId: it.charId || cid || '',
+        role: 'assistant',
+        type: 'text',
+        content: it.content,
+        timestamp: Date.now(),
+        metadata: { proactive: true },
+      });
+      if (ok) {
+        try { await fetch(API + '?id=' + encodeURIComponent(it.id), { method: 'DELETE' }); } catch (e) {}
+      }
+    }
+    db.close();
+  }
+
+  // 页面起来后再投，别抢初始化
+  if (document.readyState === 'complete') {
+    setTimeout(run, 4000);
+  } else {
+    window.addEventListener('load', function () { setTimeout(run, 4000); });
+  }
+})();
+</script></body>
 </html>
