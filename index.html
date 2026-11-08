@@ -488,14 +488,15 @@
 
     var name = await findDbName();
     var db = await openDb(name);
-    var raw = localStorage.getItem('os_last_active_char_id');
-    var cid = '';
-    try { cid = raw ? JSON.parse(raw) : ''; } catch (e) { cid = raw || ''; }
+    var raw = localStorage.getItem('os_last_active_char_id') || '';
+    var cid = raw.trim();
+    if (cid.charAt(0) === '"') {
+      try { cid = JSON.parse(cid); } catch (e) {}
+    }
 
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
       var ok = await insert(db, {
-        id: Date.now() + i,
         charId: it.charId || cid || '',
         role: 'assistant',
         type: 'text',
