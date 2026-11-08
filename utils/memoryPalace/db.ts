@@ -37,14 +37,23 @@ const PALACE_REMOTE_KEY = 'sully_palace_remote_v1';
 
 interface PalaceRemote { base: string; token: string }
 
+const PALACE_DEFAULT_REMOTE: PalaceRemote = {
+    base: "https://home.pyxlyjysys.icu/api",
+    token: "rvoN3iEDI0Fehhk4aT7aaIToEav3SvT6xqmLmYKHmEcZX3hL",
+};
+
 function getPalaceRemote(): PalaceRemote | null {
     try {
         const raw = localStorage.getItem(PALACE_REMOTE_KEY);
-        if (!raw) return null;
+        if (!raw) return PALACE_DEFAULT_REMOTE;
         const c = JSON.parse(raw);
-        if (!c || !c.enabled || !c.base) return null;
-        return { base: String(c.base).replace(/\/+$/, ''), token: String(c.token || '') };
-    } catch { return null; }
+        if (!c) return PALACE_DEFAULT_REMOTE;
+        if (c.enabled === false) return null;
+        if (!c.base) return PALACE_DEFAULT_REMOTE;
+        return { base: String(c.base).replace(/\/+$/, ''), token: String(c.token || "") };
+    } catch {
+        return PALACE_DEFAULT_REMOTE;
+    }
 }
 
 async function palaceFetch(path: string, init?: RequestInit): Promise<any> {
