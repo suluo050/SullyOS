@@ -28,12 +28,55 @@ const STORE_EVENT_BOXES    = 'event_boxes';
 const STORE_ROOM_PLATES    = 'room_plates';
 const STORE_DIGEST_REPORTS = 'digest_reports';
 
+// ─── 远端桥：记忆宫殿数据存后端 ────────────────────────
+//
+// 默认走 IndexedDB（本地）。在设置里填了 palace 地址之后，五张表的读写
+// 全部转到后端，页面只是个显示器。远端挂了自动回落本地，不至于白屏。
+
+const PALACE_REMOTE_KEY = 'sully_palace_remote_v1';
+
+interface PalaceRemote { base: string; token: string }
+
+function getPalaceRemote(): PalaceRemote | null {
+    try {
+        const raw = localStorage.getItem(PALACE_REMOTE_KEY);
+        if (!raw) return null;
+        const c = JSON.parse(raw);
+        if (!c || !c.enabled || !c.base) return null;
+        return { base: String(c.base).replace(/\/+$/, ''), token: String(c.token || '') };
+    } catch { return null; }
+}
+
+async function palaceFetch(path: string, init?: RequestInit): Promise<any> {
+    const rc = getPalaceRemote();
+    if (!rc) throw new Error('palace remote not configured');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (rc.token) headers['Authorization'] = 'Bearer ' + rc.token;
+    const res = await fetch(rc.base + path, { ...init, headers });
+    if (!res.ok) throw new Error('palace remote ' + res.status);
+    return res.json();
+}
+
+function recordKey(data: any): string | null {
+    if (!data || typeof data !== "object") return null;
+    const k = data.id ?? data.key ?? data.memoryId ?? data.boxId;
+    return k === undefined || k === null || k === "" ? null : String(k);
+}
+
 // ─── 通用辅助 ──────────────────────────────────────────
 
 /** 通用 getAll by index */
 async function getAllByIndex<T>(
     storeName: string, indexName: string, value: IDBValidKey
 ): Promise<T[]> {
+    if (getPalaceRemote()) {
+        try {
+            const data = await palaceFetch("/palace/" + encodeURIComponent(storeName) + "?index=" + encodeURIComponent(indexName) + "&value=" + encodeURIComponent(String(value)));
+            return (data.items || []) as T[];
+        } catch (err) {
+            console.warn("[palace] remote getAllByIndex failed", err);
+        }
+    }
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readonly');
@@ -47,6 +90,17 @@ async function getAllByIndex<T>(
 
 /** 通用 put */
 async function put<T>(storeName: string, data: T): Promise<void> {
+    if (getPalaceRemote()) {
+        const key = recordKey(data);
+        if (key) {
+            try {
+                await palaceFetch("/palace/" + encodeURIComponent(storeName), { method: "PUT", body: JSON.stringify({ key, value: data }) });
+                return;
+            } catch (err) {
+                console.warn("[palace] remote put failed", err);
+            }
+        }
+    }
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readwrite');
@@ -58,6 +112,15 @@ async function put<T>(storeName: string, data: T): Promise<void> {
 
 /** 通用 get by key */
 async function getByKey<T>(storeName: string, key: IDBValidKey): Promise<T | undefined> {
+    if (getPalaceRemote()) {
+        try {
+            const data = await palaceFetch("/palace/" + encodeURIComponent(storeName) + "?key=" + encodeURIComponent(String(key)));
+            if (data && data.item !== null && data.item !== undefined) return data.item as T;
+            return undefined;
+        } catch (err) {
+            console.warn("[palace] remote getByKey failed", err);
+        }
+    }
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readonly');
@@ -69,6 +132,14 @@ async function getByKey<T>(storeName: string, key: IDBValidKey): Promise<T | und
 
 /** 通用 delete by key */
 async function deleteByKey(storeName: string, key: IDBValidKey): Promise<void> {
+    if (getPalaceRemote()) {
+        try {
+            await palaceFetch("/palace/" + encodeURIComponent(storeName) + "?key=" + encodeURIComponent(String(key)), { method: "DELETE" });
+            return;
+        } catch (err) {
+            console.warn("[palace] remote delete failed", err);
+        }
+    }
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readwrite');
@@ -80,6 +151,14 @@ async function deleteByKey(storeName: string, key: IDBValidKey): Promise<void> {
 
 /** 通用 getAll (全表) */
 async function getAll<T>(storeName: string): Promise<T[]> {
+    if (getPalaceRemote()) {
+        try {
+            const data = await palaceFetch("/palace/" + encodeURIComponent(storeName));
+            return (data.items || []) as T[];
+        } catch (err) {
+            console.warn("[palace] remote getAll failed", err);
+        }
+    }
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, 'readonly');
