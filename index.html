@@ -3,7 +3,125 @@
 
 <!DOCTYPE html>
 <html lang="zh-CN" translate="no">
-  <head><script>
+  <head><!--__sullySync--><script>
+/* __sullySync: 配置存后端，浏览器只当缓存。清掉、换设备、重新添加都能拉回来。 */
+(function () {
+  var API = 'https://home.pyxlyjysys.icu/api/sully/config';
+  var TOKEN = 'rvoN3iEDI0Fehhk4aT7aaIToEav3SvT6xqmLmYKHmEcZX3hL';
+  var PREFIXES = ['os_', 'aetheros', 'sully', 'chat_', 'mp_', 'vr_'];
+  var SKIP = ['sully_proxy_worker_url_v1', 'sully_palace_remote_v1'];
+
+  function wanted(k) {
+    if (!k || SKIP.indexOf(k) >= 0) return false;
+    for (var i = 0; i < PREFIXES.length; i++) {
+      if (k.indexOf(PREFIXES[i]) === 0) return true;
+    }
+    return false;
+  }
+
+  function push(keys) {
+    var body = {};
+    var n = 0;
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (!wanted(k)) continue;
+      var v = localStorage.getItem(k);
+      if (v === null) continue;
+      body[k] = v;
+      n++;
+    }
+    if (!n) return;
+    fetch(API, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+      body: JSON.stringify(body),
+    }).catch(function () {});
+  }
+
+  // 1) 启动时拉回来（同步 XHR，保证应用读到之前就填好）
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', API, false);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + TOKEN);
+    xhr.send(null);
+    if (xhr.status === 200) {
+      var data = JSON.parse(xhr.responseText || '{}');
+      var keys = Object.keys(data);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (!wanted(k)) continue;
+        var v = data[k];
+        localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+      }
+      window.__sullyRestored = keys.length;
+    }
+  } catch (e) {}
+
+  // 2) 之后每次写 localStorage，攒一下推回后端
+  try {
+    var origSet = Storage.prototype.setItem;
+    var pending = {};
+    var timer = null;
+    Storage.prototype.setItem = function (k, v) {
+      var r = origSet.apply(this, arguments);
+      try {
+        if (wanted(k)) {
+          pending[k] = 1;
+          if (!timer) {
+            timer = setTimeout(function () {
+              var keys = Object.keys(pending);
+              pending = {};
+              timer = null;
+              push(keys);
+            }, 1200);
+          }
+        }
+      } catch (e) {}
+      return r;
+    };
+  } catch (e) {}
+})();
+</script><!--__sullyDump--><script>
+(function () {
+  window.__sullyDump = function () {
+    var out = {};
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k) continue;
+        if (k.indexOf('os_') === 0 || k.indexOf('aetheros') === 0 || k.indexOf('sully') === 0 || k.indexOf('chat_') === 0) {
+          out[k] = localStorage.getItem(k);
+        }
+      }
+    } catch (e) {}
+    return out;
+  };
+  window.__sullyCopy = function () {
+    var data = JSON.stringify(window.__sullyDump());
+    try {
+      navigator.clipboard.writeText(data);
+      alert('已复制 ' + data.length + ' 字符，粘贴发给他就行');
+    } catch (e) {
+      prompt('复制下面这段发给他：', data);
+    }
+  };
+})();
+</script><!--__sullySWoff--><script>
+(function () {
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        rs.forEach(function (r) { r.unregister(); });
+      }).catch(function () {});
+      if (window.caches && caches.keys) {
+        caches.keys().then(function (keys) {
+          keys.forEach(function (k) { caches.delete(k); });
+        }).catch(function () {});
+      }
+    }
+  } catch (e) {}
+})();
+</script><script>
 (function () {
   try {
     var KEY = 'sully_palace_remote_v1';
