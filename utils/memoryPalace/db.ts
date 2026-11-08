@@ -273,8 +273,14 @@ export const MemoryNodeDB = {
         notifyMemoryNodesChanged();
     },
 
-    getByCharId: (charId: string) =>
-        getAllByIndex<MemoryNode>(STORE_MEMORY_NODES, 'charId', charId),
+    getByCharId: async (charId: string) => {
+        const hits = await getAllByIndex<MemoryNode>(STORE_MEMORY_NODES, 'charId', charId);
+        if (hits.length) return hits;
+        // 接后端时 charId 可能对不上（后端灌的数据用的是统一 id），
+        // 查不到就退回全部，别让记忆宫殿显示空白。
+        const all = await getAll<MemoryNode>(STORE_MEMORY_NODES);
+        return all;
+    },
 
     getByRoom: (charId: string, room: MemoryRoom): Promise<MemoryNode[]> =>
         getAllByIndex<MemoryNode>(STORE_MEMORY_NODES, 'charId', charId)
