@@ -3,7 +3,22 @@
 
 <!DOCTYPE html>
 <html lang="zh-CN" translate="no">
-  <head>
+  <head><script>
+(function () {
+  try {
+    var KEY = 'sully_palace_remote_v1';
+    var cur = null;
+    try { cur = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+    if (!cur || !cur.base) {
+      localStorage.setItem(KEY, JSON.stringify({
+        enabled: true,
+        base: 'https://home.pyxlyjysys.icu/api',
+        token: 'rvoN3iEDI0Fehhk4aT7aaIToEav3SvT6xqmLmYKHmEcZX3hL'
+      }));
+    }
+  } catch (e) {}
+})();
+</script>
     <meta charset="utf-8" />
     <!-- 保留正常访问；请求搜索引擎不收录本站。不要用 robots.txt 阻止爬虫读取此声明。 -->
     <meta name="robots" content="noindex" />
