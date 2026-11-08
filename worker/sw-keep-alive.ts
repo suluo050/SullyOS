@@ -89,7 +89,7 @@ const staticManifest = typeof __STATIC_CACHE_MANIFEST__ === 'undefined' ? undefi
 // 1.20.0: 静态资源缓存、离线启动、用户确认更新；保留原推送注册。
 // 1.22.0: amsg-sw next.8，修复并发冲刷回执与分片收尾失败的诊断。
 // 1.23.0: 移除主动消息 1.0 的本地定时器（proactive-start / stop / sync 消息不再处理）。
-const SW_VERSION = '1.23.0';
+const SW_VERSION = '1.24.0';
 
 const PING_INTERVAL = 15_000;
 const MAX_MANUAL_ALIVE_MS = 5 * 60_000;
@@ -817,5 +817,11 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
 sw.addEventListener('activate', (event: ExtendableEvent) => {
   // Requests of the page that is about to load are held until this finishes, so it only takes
   // control. Older shells are cleared later, when a started page asks (SULLY_CACHE_TIDY).
-  event.waitUntil(sw.clients.claim());
+  event.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch (err) { /* ignore */ }
+    await sw.clients.claim();
+  })());
 });
